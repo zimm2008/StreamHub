@@ -22,28 +22,23 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # অফিশিয়াল অ্যান্ড্রয়েড এসডিকে সেটআপ (এটি sdkmanager এবং সব পাথ অটোমেটিক ঠিক করে দেবে)
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      # ম্যাজিক স্টেপ: সার্ভারেই অটোমেটিক Gradle Wrapper তৈরি করে নেওয়া হবে (আপনার পিসিতে বানাতে হবে না)
+      - name: Generate Gradle Wrapper
+        run: gradle wrapper --gradle-version 8.7
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+      # Android SDK এর লাইসেন্সগুলো এক্সেপ্ট করা (যাতে বিল্ড আটকে না যায়)
+      - name: Accept Android SDK Licenses
+        run: yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-      # এসডিকে টুলস ইনস্টল করে সরাসরি এপিকে বিল্ড করা
-      - name: Build APK
+      # সরাসরি ডিবাগ এপিকে বিল্ড করা
+      - name: Build Debug APK
         run: |
-          yes | sdkmanager --licenses || true
-          sdkmanager "platforms;android-34" "build-tools;34.0.0"
-          gradle assembleDebug --no-daemon
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --stacktrace
 
-      - name: Rename Output APK
-        run: |
-          mkdir -p app/build/outputs/apk/debug
-          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/StreamHub.apk || true
-
+      # আউটপুট APK ফাইলটি ডাউনলোডের জন্য রেডি করা
       - name: Upload StreamHub APK
         uses: actions/upload-artifact@v4
         with:
           name: StreamHub-Android-APK
-          path: app/build/outputs/apk/debug/StreamHub.apk
-          if-no-files-found: ignore
+          path: app/build/outputs/apk/debug/app-debug.apk
