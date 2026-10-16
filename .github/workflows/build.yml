@@ -22,20 +22,18 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # গ্রেডেল প্লাগইন দিয়ে সরাসরি প্রোজেক্ট সেটআপ ও ডিপেন্ডেন্সি ক্যাশ করা
+      # অফিশিয়াল অ্যান্ড্রয়েড এসডিকে সেটআপ (এটি sdkmanager এবং সব পাথ অটোমেটিক ঠিক করে দেবে)
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      # অ্যান্ড্রয়েড এসডিকে লাইসেন্স স্বয়ংক্রিয়ভাবে গ্রহণ করে ডিবাগ এপিকে বিল্ড করা
-      - name: Build APK with Android SDK
+      # এসডিকে টুলস ইনস্টল করে সরাসরি এপিকে বিল্ড করা
+      - name: Build APK
         run: |
-          export ANDROID_SDK_ROOT=$HOME/android-sdk
-          mkdir -p $ANDROID_SDK_ROOT
-          
-          # বিল্ড করার জন্য প্রয়োজনীয় কমানো কমান্ড
-          sdkmanager --install "platforms;android-34" "build-tools;34.0.0" || true
-          
-          # গ্রেডেল বিল্ড রান করা
+          yes | sdkmanager --licenses || true
+          sdkmanager "platforms;android-34" "build-tools;34.0.0"
           gradle assembleDebug --no-daemon
 
       - name: Rename Output APK
