@@ -22,18 +22,25 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # অ্যান্ড্রয়েড এসডিকে এবং বিল্ড টুলস সরাসরি টার্মিনাল কমান্ড দিয়ে ইনস্টল করার পদ্ধতি (শতভাগ নির্ভরযোগ্য)
-      - name: Install Android SDK & Build Tools
+      # অ্যান্ড্রয়েড এসডিকে পাথ এবং লাইসেন্স অটোমেটিক সেটআপ করা
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # গ্রেডেল ও বিল্ড টুলস সঠিকভাবে নামিয়ে কম্পাইল করার এনভায়রনমেন্ট রেডি করা
+      - name: Build Debug APK with Gradle
+        env:
+          ANDROID_HOME: ${{ steps.setup-android.outputs.android-home }}
         run: |
-          echo "y" | sudo ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0"
-
-      - name: Setup Gradle 8.7
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.7'
-
-      - name: Build Debug APK
-        run: gradle assembleDebug --no-daemon --stacktrace
+          # প্রয়োজনীয় প্ল্যাটফর্ম ও বিল্ড টুলস নিশ্চিত করা
+          yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --sdk_root=${ANDROID_HOME} "platforms;android-34" "build-tools;34.0.0"
+          
+          # গ্রেডেল দিয়ে প্রোজেক্ট কম্পাইল করা
+          chmod +x gradlew || true
+          if [ -f "./gradlew" ]; then
+            ./gradlew assembleDebug --no-daemon
+          else
+            gradle assembleDebug --no-daemon
+          fi
 
       - name: Rename Output APK
         run: |
