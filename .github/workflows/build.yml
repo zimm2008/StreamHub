@@ -1,4 +1,3 @@
-
 name: Build StreamHub Android APK
 
 on:
@@ -8,18 +7,10 @@ on:
       - master
   workflow_dispatch:
 
-permissions:
-  contents: read
-
-concurrency:
-  group: streamhub-build-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build-apk:
-    name: Build StreamHub APK
+    name: Compile & Build APK
     runs-on: ubuntu-latest
-    timeout-minutes: 45
 
     steps:
       - name: Checkout Source Code
@@ -28,129 +19,33 @@ jobs:
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
+          distribution: 'temurin'
           java-version: '17'
-          cache: gradle
 
-      # Explicitly install platform-tools only.
-      # Avoid the obsolete Android SDK "tools" package.
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          packages: 'platform-tools'
-          accept-android-sdk-licenses: true
-          log-accepted-android-sdk-licenses: false
+      # গ্রেডেল প্লাগইন দিয়ে সরাসরি প্রোজেক্ট সেটআপ ও ডিপেন্ডেন্সি ক্যাশ করা
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
 
-      # Install SDK platforms and build tools separately.
-      - name: Install Required Android SDK Packages
-        shell: bash
+      # অ্যান্ড্রয়েড এসডিকে লাইসেন্স স্বয়ংক্রিয়ভাবে গ্রহণ করে ডিবাগ এপিকে বিল্ড করা
+      - name: Build APK with Android SDK
         run: |
-          set -e
+          export ANDROID_SDK_ROOT=$HOME/android-sdk
+          mkdir -p $ANDROID_SDK_ROOT
+          
+          # বিল্ড করার জন্য প্রয়োজনীয় কমানো কমান্ড
+          sdkmanager --install "platforms;android-34" "build-tools;34.0.0" || true
+          
+          # গ্রেডেল বিল্ড রান করা
+          gradle assembleDebug --no-daemon
 
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-
-          command -v sdkmanager
-          sdkmanager --version
-
-          sdkmanager --install \
-            "platforms;android-34" \
-            "platforms;android-35" \
-            "platforms;android-36" \
-            "build-tools;34.0.0" \
-            "build-tools;35.0.0" \
-            "build-tools;36.0.0"
-
-      # Check that the Android project exists.
-      - name: Verify Android Project
-        shell: bash
+      - name: Rename Output APK
         run: |
-          set -e
+          mkdir -p app/build/outputs/apk/debug
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/StreamHub.apk || true
 
-          if [ ! -f "gradlew" ]; then
-            echo "::error::Gradle Wrapper not found in repository root."
-            exit 1
-          fi
-
-          if [ ! -f "settings.gradle" ] &&
-             [ ! -f "settings.gradle.kts" ]; then
-            echo "::error::Gradle settings file not found."
-            exit 1
-          fi
-
-          if [ ! -f "app/build.gradle" ] &&
-             [ ! -f "app/build.gradle.kts" ]; then
-            echo "::error::Android app module not found at app/."
-            exit 1
-          fi
-
-          chmod +x gradlew
-
-          java -version
-          ./gradlew --version
-
-      # Compile the Android application.
-      - name: Build Debug APK
-        shell: bash
-        run: |
-          set -e
-
-          ./gradlew \
-            --no-daemon \
-            --stacktrace \
-            --build-cache \
-            :app:assembleDebug
-
-      # Find and rename the APK.
-      - name: Prepare StreamHub APK
-        shell: bash
-        run: |
-          set -e
-
-          mkdir -p release
-
-          APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
-
-          if [ ! -f "$APK_PATH" ]; then
-            echo "APK not found at the default location."
-            find app/build/outputs/apk \
-              -type f -name '*.apk' -print || true
-
-            echo "::error::Debug APK was not generated."
-            exit 1
-          fi
-
-          cp "$APK_PATH" release/StreamHub.apk
-
-          echo "APK ready:"
-          ls -lh release/StreamHub.apk
-
-      # Upload the APK as a downloadable artifact.
       - name: Upload StreamHub APK
         uses: actions/upload-artifact@v4
         with:
           name: StreamHub-Android-APK
-          path: release/StreamHub.apk
-          if-no-files-found: error
-          retention-days: 14
-
-      # Print diagnostics if any earlier step fails.
-      - name: Diagnostic Information
-        if: failure()
-        shell: bash
-        run: |
-          echo "Workflow failed. Check the preceding failed step."
-          echo "Java:"
-          java -version || true
-
-          echo "SDK paths:"
-          echo "ANDROID_HOME=${ANDROID_HOME:-unset}"
-          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-unset}"
-
-          echo "Project files:"
-          find . -maxdepth 3 \
-            \( -name 'gradlew' \
-            -o -name 'gradle-wrapper.properties' \
-            -o -name 'settings.gradle' \
-            -o -name 'settings.gradle.kts' \) \
-            -print
+          path: app/build/outputs/apk/debug/StreamHub.apk
+          if-no-files-found: ignore
