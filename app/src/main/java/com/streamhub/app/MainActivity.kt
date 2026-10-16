@@ -12,10 +12,6 @@ import androidx.core.content.ContextCompat
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit class StatusViewHolder {
-        // UI উপাদানগুলোর রেফারেন্স রাখার জন্য
-    }
-
     private lateinit var statusText: TextView
     private val PERMISSION_REQUEST_CODE = 1001
 
