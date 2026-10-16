@@ -1,3 +1,4 @@
+
 name: Build StreamHub Android APK
 
 on:
@@ -7,49 +8,156 @@ on:
       - master
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: streamhub-apk-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-apk:
-    name: Compile & Build APK
+    name: Build StreamHub Debug APK
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
+      # 1. Download repository source code
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
+      # 2. Install Java 17
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
+          cache: gradle
 
-      # অ্যান্ড্রয়েড এসডিকে পাথ এবং লাইসেন্স অটোমেটিক সেটআপ করা
+      # 3. Configure Android SDK
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: true
+          packages: |
+            platform-tools
+            platforms;android-34
+            platforms;android-35
+            platforms;android-36
+            build-tools;34.0.0
+            build-tools;35.0.0
+            build-tools;36.0.0
 
-      # গ্রেডেল ও বিল্ড টুলস সঠিকভাবে নামিয়ে কম্পাইল করার এনভায়রনমেন্ট রেডি করা
-      - name: Build Debug APK with Gradle
-        env:
-          ANDROID_HOME: ${{ steps.setup-android.outputs.android-home }}
+      # 4. Verify project files and SDK
+      - name: Verify Build Environment
+        shell: bash
         run: |
-          # প্রয়োজনীয় প্ল্যাটফর্ম ও বিল্ড টুলস নিশ্চিত করা
-          yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --sdk_root=${ANDROID_HOME} "platforms;android-34" "build-tools;34.0.0"
-          
-          # গ্রেডেল দিয়ে প্রোজেক্ট কম্পাইল করা
-          chmod +x gradlew || true
-          if [ -f "./gradlew" ]; then
-            ./gradlew assembleDebug --no-daemon
-          else
-            gradle assembleDebug --no-daemon
+          set -e
+
+          echo "Java version:"
+          java -version
+
+          echo "Android SDK:"
+          echo "$ANDROID_HOME"
+
+          echo "Checking project files..."
+
+          if [ ! -f "settings.gradle" ] &&
+             [ ! -f "settings.gradle.kts" ]; then
+            echo "::error::settings.gradle or settings.gradle.kts not found at repository root."
+            exit 1
           fi
 
-      - name: Rename Output APK
-        run: |
-          mkdir -p app/build/outputs/apk/debug
-          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/StreamHub.apk || true
+          if [ ! -f "gradlew" ]; then
+            echo "::error::gradlew is missing. Commit the Gradle Wrapper files to your repository."
+            exit 1
+          fi
 
+          if [ ! -f "app/build.gradle" ] &&
+             [ ! -f "app/build.gradle.kts" ]; then
+            echo "::error::app/build.gradle or app/build.gradle.kts not found."
+            exit 1
+          fi
+
+          echo "Build environment checks passed."
+
+      # 5. Build the APK
+      - name: Build Debug APK
+        shell: bash
+        run: |
+          set -e
+
+          chmod +x ./gradlew
+
+          ./gradlew --version
+
+          ./gradlew \
+            --no-daemon \
+            --stacktrace \
+            --build-cache \
+            assembleDebug
+
+      # 6. Collect and rename generated APK
+      - name: Prepare StreamHub APK
+        if: success()
+        shell: bash
+        run: |
+          set -e
+
+          mkdir -p release
+
+          echo "Searching for generated debug APK files..."
+
+          find . \
+            -type f \
+            -path "*/build/outputs/apk/*" \
+            -name "*.apk" \
+            ! -path "*/intermediates/*" \
+            -print
+
+          APK_PATH="$(find app/build/outputs/apk \
+            -type f \
+            -name '*.apk' \
+            -print -quit 2>/dev/null || true)"
+
+          if [ -z "$APK_PATH" ] || [ ! -f "$APK_PATH" ]; then
+            echo "::error::No APK was generated in app/build/outputs/apk."
+            exit 1
+          fi
+
+          cp "$APK_PATH" release/StreamHub.apk
+
+          echo "APK successfully prepared:"
+          ls -lh release/StreamHub.apk
+
+      # 7. Upload APK to GitHub Actions Artifacts
       - name: Upload StreamHub APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: StreamHub-Android-APK
-          path: app/build/outputs/apk/debug/StreamHub.apk
-          if-no-files-found: ignore
+          path: release/StreamHub.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      # 8. Show useful diagnostics if the build fails
+      - name: Build Failure Diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          echo "Build failed. Review the logs of the failed step above."
+          echo "Java version:"
+          java -version || true
+
+          echo "Android SDK location:"
+          echo "${ANDROID_HOME:-not set}"
+
+          echo "Gradle and project configuration files:"
+          find . -maxdepth 3 \
+            \( -name 'gradlew' \
+            -o -name 'gradle-wrapper.properties' \
+            -o -name 'build.gradle' \
+            -o -name 'build.gradle.kts' \
+            -o -name 'settings.gradle' \
+            -o -name 'settings.gradle.kts' \) \
+            -print
