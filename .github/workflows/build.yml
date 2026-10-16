@@ -141,23 +141,26 @@ jobs:
           retention-days: 14
 
       # 8. Show useful diagnostics if the build fails
-      - name: Build Failure Diagnostics
-        if: failure()
+      
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK Packages
         shell: bash
         run: |
-          echo "Build failed. Review the logs of the failed step above."
-          echo "Java version:"
-          java -version || true
+          set -euo pipefail
 
-          echo "Android SDK location:"
-          echo "${ANDROID_HOME:-not set}"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
 
-          echo "Gradle and project configuration files:"
-          find . -maxdepth 3 \
-            \( -name 'gradlew' \
-            -o -name 'gradle-wrapper.properties' \
-            -o -name 'build.gradle' \
-            -o -name 'build.gradle.kts' \
-            -o -name 'settings.gradle' \
-            -o -name 'settings.gradle.kts' \) \
-            -print
+          sdkmanager --version
+
+          yes | sdkmanager --licenses >/dev/null || true
+
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
+
+          echo "Android SDK packages installed successfully."
+
