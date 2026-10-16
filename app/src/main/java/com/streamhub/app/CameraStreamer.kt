@@ -16,7 +16,6 @@ class CameraStreamer(private val context: Context) {
     private var mediaCodec: MediaCodec? = null
     private var isStreaming = false
 
-    // ফোনের সব ক্যামেরা লেন্স স্ক্যান করে লিস্ট বের করার মেথড
     fun getAvailableCameraLenses(): List<Map<String, String>> {
         val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
         val cameraList = mutableListOf<Map<String, String>>()
@@ -41,7 +40,6 @@ class CameraStreamer(private val context: Context) {
         return cameraList
     }
 
-    // হার্ডওয়্যার এনকোডার ইনিশিয়ালাইজ করা (H.264 / 4K Support)
     fun startCameraEncoder(width: Int, height: Int, fps: Int, bitrate: Int) {
         try {
             val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
@@ -56,7 +54,7 @@ class CameraStreamer(private val context: Context) {
                 start()
             }
             isStreaming = true
-            Log.s(TAG, "Camera Hardware Encoder started successfully at ${width}x${height} @ ${fps}FPS")
+            Log.d(TAG, "Camera Hardware Encoder started successfully at ${width}x${height} @ ${fps}FPS")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start camera encoder: ${e.message}")
         }
@@ -68,7 +66,7 @@ class CameraStreamer(private val context: Context) {
             mediaCodec?.stop()
             mediaCodec?.release()
             mediaCodec = null
-            Log.s(TAG, "Camera Encoder stopped.")
+            Log.d(TAG, "Camera Encoder stopped.")
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping encoder: ${e.message}")
         }
