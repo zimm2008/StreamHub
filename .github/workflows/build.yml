@@ -1,0 +1,56 @@
+name: Build StreamHub Android APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch: # এটি থাকলে আপনি GitHub থেকে যেকোনো সময় ১ ক্লিকে ম্যানুয়ালিও বিল্ড রান করতে পারবেন
+
+jobs:
+  build-apk:
+    name: Compile & Build APK
+    runs-on: ubuntu-latest
+
+    steps:
+      # ১. আপনার রিপোজিটরি থেকে সব কোড ফাইল ক্লাউড সার্ভারে চেকআউট করা
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      # ২. অ্যান্ড্রয়েড বিল্ডের জন্য স্ট্যান্ডার্ড JDK 17 (Java 17) সেটআপ করা
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # ৩. Android SDK এবং লাইসেন্স অটোমেটিক কনফিগার করা
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # ৪. Gradle 8.7 সেটআপ করা (যাতে পিসিতে আলাদা gradle wrapper ফাইল ছাড়াই সরাসরি বিল্ড হয়)
+      - name: Setup Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      # ৫. কোড কম্পাইল করে ইনস্টলযোগ্য APK তৈরি করা
+      - name: Build Debug APK
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      # ৬. জেনারেট হওয়া APK ফাইলটির নাম সুন্দর করে StreamHub.apk রাখা
+      - name: Rename Output APK
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/StreamHub.apk
+
+      # ৭. চূড়ান্ত StreamHub.apk ফাইলটি সরাসরি ডাউনলোডের জন্য GitHub Artifacts-এ আপলোড করা
+      - name: Upload StreamHub APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: StreamHub-Android-APK
+          path: app/build/outputs/apk/debug/StreamHub.apk
+          if-no-files-found: error
